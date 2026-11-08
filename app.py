@@ -72,6 +72,16 @@ def build_window(store: Store | None = None, maximized: bool = False) -> tuple[A
 
 
 def main() -> int:
+    # --windowed builds have no console streams; keep startup failures diagnosable.
+    if getattr(sys, "frozen", False) and (sys.stdout is None or sys.stderr is None):
+        log_dir = os.path.join(os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"),
+                               "yhShell", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        stream = open(os.path.join(log_dir, "startup.log"), "w", encoding="utf-8", buffering=1)
+        if sys.stdout is None:
+            sys.stdout = stream
+        if sys.stderr is None:
+            sys.stderr = stream
     store = Store()
     try:
         _window, _api = build_window(store)

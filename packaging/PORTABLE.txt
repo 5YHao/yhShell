@@ -1,0 +1,30 @@
+yhShell - Windows x64
+=====================
+Extract the ENTIRE ZIP to a folder, then run yhShell.exe.
+Keep the _internal folder beside yhShell.exe. No Python installation is needed.
+
+Requirements: Windows 10/11 x64, .NET Framework 4.8+, Microsoft Edge WebView2
+Evergreen Runtime. WebView2 official download:
+https://developer.microsoft.com/microsoft-edge/webview2/consumer/
+
+This is a no-install distribution, NOT a data-isolated portable profile.
+Settings, encrypted credentials and conversation history live in:
+  %APPDATA%\yhShell
+Both installed and ZIP editions share that profile for the same Windows user.
+Windows DPAPI secrets cannot be moved to another user/PC by copying config files.
+Advanced: YHSELL_HOME may override the data directory before starting the app.
+Startup diagnostics: %LOCALAPPDATA%\yhShell\logs\startup.log
+Run from a normal local folder. Network/Internet-zone paths may cause .NET to
+reject DLL loading. Move the extracted directory to a trusted local folder;
+do not disable Windows security policies to work around a startup failure.
+
+Update via Settings > About. Downloads are opened in your browser; no automatic
+installation. Back up data, finish SSH/Agent/file transfers and exit before
+replacing the ENTIRE application folder. Do not mix old/new _internal contents.
+Uninstalling the installed edition intentionally retains user data.
+
+This release is unsigned. Only download it from the official repository and
+verify SHA256SUMS.txt. Windows may display an unknown-publisher warning.
+SHA256 proves file integrity, not publisher authenticity.
+
+Project: https://github.com/5YHao/yhShell

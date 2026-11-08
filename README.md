@@ -183,7 +183,7 @@ AI 面板底部会显示当前连接状态与快捷键。每条会话的 AI 上�
 3. 创建该标签的 GitHub Release，填写更新说明，上传准备好的发行包（如有），确认标签和应用版本一致。
 4. 验证源码/发行包后正式发布。Draft 和 Pre-release 不参与稳定版检测；仅推送代码或标签不会触发更新。
 
-当前更新源为 `5YHao/yhShell`，fork 后需修改 `yhshell/updater.py` 的仓库常量。尚未发布正式 Release 时显示「暂无正式版本」。本次未配置自动打包/发布；后续可在 GitHub Actions 中增加标签版本校验、测试、Windows x64 构建和校验文件，最终人工确认发布 Draft Release。
+当前更新源为 `5YHao/yhShell`，fork 后需修改 `yhshell/updater.py` 的仓库常量。尚未发布正式 Release 时显示「暂无正式版本」。已提供下述本机一键打包；未配置 GitHub Actions 自动发布。
 
 更新专项测试不访问真实 GitHub：
 
@@ -192,6 +192,41 @@ AI 面板底部会显示当前连接状态与快捷键。每条会话的 AI 上�
 # 前端交互回归（需 tests 下已安装 puppeteer-core 和本机 Edge）
 node tests/test_updates_ui.mjs
 ```
+
+## Windows 打包与发布
+
+在 **Windows x64 + 64 位 x64 Python** 上运行，先完成 `setup.ps1`，并安装 [Inno Setup 6.3+](https://jrsoftware.org/isdl.php)（默认路径，或将 ISCC.exe 加入 PATH）。然后双击或执行：
+
+```powershell
+.\build.bat
+# 仅构建便携 ZIP，不需要 Inno Setup
+.\build.bat -SkipInstaller
+# 指定自定义编译器路径（也支持 Inno Setup 7）
+.\build.bat -IsccPath "C:\Tools\Inno Setup 6\ISCC.exe"
+# 可选：先清理 dist；传入版本必须与代码一致
+.\build.bat -Clean -Version 0.1.0
+```
+
+首次打包会在项目 `.venv` 内安装 PyInstaller。脚本按 `yhshell.__version__` 读取版本，不更改全局 Python；自定义逻辑在 `packaging/build.ps1`、`packaging/yhShell.spec` 和 `packaging/yhShell.iss`。缺少 Inno Setup 时会保留已生成 ZIP 并报错；不会下载编译器或静默安装工具。
+
+产物位于 `dist/`（不加入 Git）：
+
+- `yhShell-<版本>-windows-x64.zip`：解压整个压缩包后双击 `yhShell.exe`，不要只复制 EXE，必须保留 `_internal`。
+- `yhShell-Setup-<版本>-windows-x64.exe`：按当前 Windows 用户安装，无需管理员权限；默认安装到 `%LOCALAPPDATA%\Programs\yhShell`，带开始菜单和可选桌面快捷方式。
+- `SHA256SUMS.txt`：两个发行文件的 SHA256，用 `Get-FileHash -Algorithm SHA256 <文件>` 核对。
+
+两种形式均内置 Python 运行时，用户无需安装 Python，但要求 **Windows 10/11 x64、.NET Framework 4.8+、WebView2 Evergreen Runtime**。安装器检测 WebView2，缺少时提示并提供官方网页入口，不内置/自动下载运行时，离线安装前请自行准备依赖。当前构建未做代码签名，Windows 可能提示未知发布者，校验和不等于发行签名。
+
+**这里的“便携版”指免安装程序，不表示数据跟随 U 盘**：安装版和 ZIP 版默认共用 `%APPDATA%\yhShell`，密码由当前 Windows 用户 DPAPI 保护，不能复制到其他用户/机器后直接解密。升级前结束 SSH/Agent/文件传输并退出应用，再安装新版本或整体替换便携目录，避免新旧依赖混用。卸载保留主机、密钥和对话记录。无控制台版启动错误可查看 `%LOCALAPPDATA%\yhShell\logs\startup.log`。如果便携版所在路径被 Windows 认作网络/Internet 区域，.NET 可能拒绝加载 DLL；应解压到可信本地目录，不建议修改系统安全策略。
+
+本机验证命令（会打开并关闭测试窗口；安装测试会临时登记当前用户的应用卸载项，请勿在已有正式安装时运行）：
+
+```powershell
+.venv\Scripts\python.exe packaging\smoke.py "C:\本地测试目录\yhShell.exe"
+.venv\Scripts\python.exe packaging\verify_installer.py
+```
+
+发布时，先在本机测试，再到仓库 **Releases → Draft a new release**，创建与代码一致的 `v<版本>` 标签，填写更新说明，将上述 ZIP、安装包和校验文件作为附件上传，再发布为正式稳定版。不要把 `dist/yhShell` 目录或个人配置上传到源码仓库；GitHub 自动生成的 Source code ZIP 不是可运行程序。
 
 ## 快捷键
 

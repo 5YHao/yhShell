@@ -31,6 +31,63 @@ try {
   const writes = () => page.evaluate(() => window.__yhMockWrites.map(w => w.data));
   const visible = id => page.$eval(`#${id}`, n => !n.classList.contains('hidden'));
 
+  // Seed the real browser clipboard through a trusted copy shortcut. Mock only
+  // readText (used by the app's custom paste), leaving native paste enabled so
+  // this catches a shortcut that accidentally takes both clipboard paths.
+  const clipboardText = '/etc/profile.d/colorls.sh';
+  await page.evaluate(text => {
+    const source = document.createElement('textarea');
+    source.id = 'clipboard-source';
+    source.value = text;
+    document.body.appendChild(source);
+    source.focus();
+    source.select();
+    window.__yhClipboardReads = 0;
+    Object.defineProperty(navigator.clipboard, 'readText', {
+      configurable: true,
+      value: async () => {
+        window.__yhClipboardReads++;
+        return text;
+      },
+    });
+  }, clipboardText);
+  await page.keyboard.down('Control');
+  await page.keyboard.press('KeyC');
+  await page.keyboard.up('Control');
+  await page.evaluate(() => document.querySelector('#clipboard-source').remove());
+  // Observe the event after xterm handles it: returning false from its custom
+  // handler alone does not cancel Chromium's native clipboard action.
+  await page.evaluate(() => {
+    window.__yhPasteKeyCanceled = [];
+    document.addEventListener('keydown', event => {
+      if (event.ctrlKey && event.shiftKey && event.code === 'KeyV') {
+        window.__yhPasteKeyCanceled.push(event.defaultPrevented);
+      }
+    });
+  });
+  await terminalFocus();
+  await chord('KeyV');
+  assert.deepEqual(await writes(), [clipboardText], 'Ctrl+Shift+V must paste exactly once');
+  assert.deepEqual(await page.evaluate(() => window.__yhPasteKeyCanceled), [true]);
+  assert.equal(await page.evaluate(() => window.__yhClipboardReads), 1);
+
+  // Native paste events remain available, without reading through the app.
+  await terminalFocus();
+  await page.evaluate(text => {
+    const clipboardData = new DataTransfer();
+    clipboardData.setData('text/plain', text);
+    document.activeElement.dispatchEvent(new ClipboardEvent('paste', {
+      clipboardData, bubbles: true, cancelable: true,
+    }));
+  }, clipboardText);
+  assert.deepEqual(await writes(), [clipboardText], 'native paste must still paste once');
+  assert.equal(await page.evaluate(() => window.__yhClipboardReads), 1);
+
+  await terminalFocus();
+  await page.click('.terminal-host', { button: 'right' });
+  await page.click('#terminal-menu [data-action="paste"]');
+  assert.deepEqual(await writes(), [clipboardText], 'context-menu paste must paste exactly once');
+
   await terminalFocus();
   await chord('KeyW');
   assert.equal(await visible('confirm-modal'), true);
@@ -118,7 +175,7 @@ try {
   await page.keyboard.up('Control');
   assert.deepEqual(await writes(), ['\x03']);
   assert.deepEqual(await page.evaluate(() => window.__yhErrors), []);
-  console.log('PASS keyboard UI: confirmation isolation, cancel/escape, focus containment/restoration, modal shortcuts, nested dialogs, palette and shell Ctrl+C');
+  console.log('PASS keyboard UI: single shortcut/native/context-menu paste, confirmation isolation, cancel/escape, focus containment/restoration, modal shortcuts, nested dialogs, palette and shell Ctrl+C');
 } finally {
   await browser.close();
 }

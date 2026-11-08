@@ -19,3 +19,8 @@ tests/pnpm-lock.yaml
 # misc
 .DS_Store
 Thumbs.db
+
+# generated Windows release artifacts and local tools
+build/
+dist/
+.tools/

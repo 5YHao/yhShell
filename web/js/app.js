@@ -543,6 +543,9 @@
         return false;
       }
       if (event.ctrlKey && event.shiftKey && event.code === 'KeyV') {
+        // Returning false only skips xterm's key handling. Cancel Chromium's
+        // native paste too, otherwise it pastes again alongside pasteInto().
+        event.preventDefault();
         pasteInto(session);
         return false;
       }
