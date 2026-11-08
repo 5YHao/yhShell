@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>yhShell</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%235b9dff'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='16' font-weight='bold' fill='white' text-anchor='middle'%3E%3E_%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="vendor/xterm.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app" data-theme="dark">
+
+  <!-- 自定义标题栏：窗口是无边框的，最小化 / 最大化 / 关闭由前端绘制 -->
+  <header id="titlebar">
+    <div class="tb-brand">
+      <div class="tb-logo" aria-hidden="true">&gt;_</div>
+      <div class="tb-name">
+        <strong>yhShell</strong>
+        <span>SSH · AI Agent</span>
+      </div>
+    </div>
+    <div class="tb-drag"></div>
+    <div class="tb-controls">
+      <button type="button" class="tb-btn" id="btn-win-min" title="最小化" aria-label="最小化">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.6 6h6.8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+      </button>
+      <button type="button" class="tb-btn" id="btn-win-max" title="最大化" aria-label="最大化">
+        <svg class="ico-max" viewBox="0 0 12 12" aria-hidden="true"><rect x="2.7" y="2.7" width="6.6" height="6.6" rx="1.2" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>
+        <svg class="ico-restore" viewBox="0 0 12 12" aria-hidden="true">
+          <rect x="2.3" y="4.4" width="5.3" height="5.3" rx="1.1" stroke="currentColor" stroke-width="1.1" fill="none"/>
+          <path d="M4.5 4.4V3.5c0-.7.5-1.2 1.2-1.2h3.1c.7 0 1.2.5 1.2 1.2v3.1c0 .7-.5 1.2-1.2 1.2h-.9" stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+        </svg>
+      </button>
+      <button type="button" class="tb-btn tb-close" id="btn-win-close" title="关闭" aria-label="关闭">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3.1 3.1l5.8 5.8M8.9 3.1L3.1 8.9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <aside id="sidebar">
+    <div class="side-menu">
+      <button class="btn primary block" id="btn-new-host">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        新建连接
+      </button>
+
+      <nav class="side-nav" id="side-nav" aria-label="主导航">
+        <button type="button" class="menu-item active" data-view="terminal" aria-current="true">
+          <svg class="menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="2.4" y="3.2" width="11.2" height="9.6" rx="1.6" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <path d="M5 6.6 6.8 8 5 9.4M8.6 9.8h2.4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="menu-item-label">终端</span>
+          <span class="menu-item-count" id="session-total">0</span>
+        </button>
+        <button type="button" class="menu-item" data-view="hosts">
+          <svg class="menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <rect x="2.6" y="2.9" width="10.8" height="4.2" rx="1.1" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <rect x="2.6" y="8.9" width="10.8" height="4.2" rx="1.1" stroke="currentColor" stroke-width="1.2" fill="none"/>
+            <path d="M4.6 5h.01M4.6 11h.01" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          <span class="menu-item-label">主机</span>
+          <span class="menu-item-count" id="host-total">0</span>
+        </button>
+        <button type="button" class="menu-item" data-view="snippets">
+          <svg class="menu-item-icon" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3.4 4.2 6.9 8l-3.5 3.8M8.6 11.9h4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="menu-item-label">指令集</span>
+          <span class="menu-item-count" id="snippet-total">0</span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="side-foot">
+      <button class="side-link" id="btn-settings">
+        <svg viewBox="0 0 16 16"><path d="M8 10.2a2.2 2.2 0 1 0 0-4.4 2.2 2.2 0 0 0 0 4.4Z" stroke="currentColor" stroke-width="1.3"/><path d="M13.1 9.9c.1-.6.1-1.2 0-1.8l1.2-.9-1.2-2-1.5.5a5 5 0 0 0-1.5-.9l-.2-1.6h-2.3l-.2 1.6c-.6.2-1.1.5-1.5.9l-1.5-.5-1.2 2 1.2.9c-.1.6-.1 1.2 0 1.8l-1.2.9 1.2 2 1.5-.5c.4.4.9.7 1.5.9l.2 1.6h2.3l.2-1.6c.6-.2 1.1-.5 1.5-.9l1.5.5 1.2-2-1.2-.9Z" stroke="currentColor" stroke-width="1.1" fill="none"/></svg>
+        设置
+      </button>
+      <span class="version-tag">v0.1.0</span>
+    </div>
+  </aside>
+
+  <main id="main">
+    <!-- 终端页 -->
+    <section class="view active" id="view-terminal">
+      <div class="tabbar" id="tabbar">
+        <div class="tabs" id="tabs"></div>
+        <button class="tabbar-tool" id="btn-snippets" title="指令集 (Ctrl+Shift+K)">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.4 4.2 6.9 8l-3.5 3.8M8.6 11.9h4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>指令集</span>
+        </button>
+        <button class="icon-btn" id="btn-tab-new" title="新建连接 (Ctrl+Shift+T)">
+          <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+
+      <div class="workspace">
+        <section class="terminal-area" id="terminal-area">
+          <div class="welcome" id="welcome">
+            <div class="welcome-inner">
+              <div class="welcome-logo">&gt;_</div>
+              <h2>连接一台服务器，开始工作</h2>
+              <p>交互式终端、会话管理与 AI 助手，一个窗口搞定。</p>
+              <div class="welcome-actions">
+                <button class="btn primary" id="btn-welcome-new">新建连接</button>
+                <button class="btn ghost" id="btn-welcome-settings">配置 AI 模型</button>
+              </div>
+              <div class="welcome-hints">
+                <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>T</kbd> 新建连接</span>
+                <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>K</kbd> 指令集</span>
+                <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>C</kbd> 复制</span>
+                <span><kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>V</kbd> 粘贴</span>
+              </div>
+            </div>
+          </div>
+          <div id="terminal-stack"></div>
+
+          <!-- ZMODEM (rz / sz) 传输面板 -->
+          <div class="transfer-card hidden" id="transfer-card" role="status" aria-live="polite">
+            <div class="transfer-head">
+              <span class="transfer-badge" aria-hidden="true">
+                <svg viewBox="0 0 16 16"><path d="M8 2.6v8.2M4.8 7.6 8 10.8l3.2-3.2M2.8 12.6h10.4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <div class="transfer-titles">
+                <strong id="transfer-title">ZMODEM 文件传输</strong>
+                <span id="transfer-subtitle" class="muted"></span>
+              </div>
+              <button class="icon-btn" id="transfer-close" title="关闭" aria-label="关闭">
+                <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+            <div class="transfer-file" id="transfer-file">—</div>
+            <div class="transfer-track"><div class="transfer-fill" id="transfer-fill"></div></div>
+            <div class="transfer-meta">
+              <span id="transfer-size"></span>
+              <span id="transfer-speed"></span>
+              <span id="transfer-count"></span>
+            </div>
+            <div class="transfer-path" id="transfer-path"></div>
+            <div class="transfer-actions">
+              <button type="button" class="btn small ghost" id="transfer-cancel">取消</button>
+              <button type="button" class="btn small ghost" id="transfer-browse">更改位置</button>
+              <button type="button" class="btn small primary" id="transfer-accept">开始接收</button>
+            </div>
+          </div>
+
+          <!-- 快捷指令条：终端底部一行常用指令，点一下只输入、不执行 -->
+          <div class="quick-bar hidden" id="quick-bar">
+            <span class="quick-label" title="快捷插入内置指令">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.4 4.2 6.9 8l-3.5 3.8M8.6 11.9h4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              指令集
+            </span>
+            <select id="quick-group" class="quick-select" title="选择指令集" aria-label="选择指令集"></select>
+            <div class="quick-items" id="quick-items"></div>
+            <button type="button" class="quick-more" id="quick-more" title="打开完整指令面板 (Ctrl+Shift+K)">全部…</button>
+          </div>
+
+          <div class="statusbar" id="statusbar">
+            <div class="status-left">
+              <span class="dot" id="status-dot"></span>
+              <span id="status-text">未连接</span>
+            </div>
+            <div class="status-right">
+              <span id="status-size"></span>
+              <span id="status-fingerprint" title="远端主机密钥指纹"></span>
+            </div>
+          </div>
+        </section>
+
+        <aside class="ai-panel" id="ai-panel">
+          <div class="ai-head">
+            <div class="ai-title">
+              <span class="spark">✦</span>
+              <div>
+                <strong>AI 助手</strong>
+              </div>
+            </div>
+            <div class="ai-head-actions">
+              <button class="icon-btn" id="btn-ai-history" title="历史对话">
+                <svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.3" fill="none"/><path d="M8 4.9V8l2.1 1.3" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="icon-btn" id="btn-ai-clear" title="新对话">
+                <svg viewBox="0 0 16 16"><path d="M3 3.8h10v6.4H7.2L4.6 12.4V10.2H3V3.8Z" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linejoin="round"/><path d="M8 5.4v2.8M6.6 6.8h2.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+              </button>
+              <button class="icon-btn" id="btn-ai-collapse" title="收起面板">
+                <svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="ai-approval" id="ai-approval-bar">
+            <span class="approval-label">执行策略</span>
+            <select id="ai-approval-select">
+              <option value="confirm">每条命令确认</option>
+              <option value="safe">仅安全命令自动执行</option>
+              <option value="auto">全部自动执行</option>
+            </select>
+          </div>
+
+          <div class="chat-banner hidden" id="chat-banner">
+            <div class="chat-banner-text">
+              <span class="chat-banner-icon">◷</span>
+              <span id="chat-banner-label">正在查看历史记录</span>
+            </div>
+            <div class="chat-banner-actions">
+              <button class="btn small primary" id="btn-banner-continue">继续此对话</button>
+              <button class="btn small ghost" id="btn-banner-exit">退出查看</button>
+            </div>
+          </div>
+
+          <div class="chat" id="chat">
+            <div class="chat-empty" id="chat-empty">
+              <div class="chat-empty-icon">✦</div>
+              <p class="chat-empty-title">AI 运维助手</p>
+              <p class="chat-empty-text">描述你想检查或处理的事情，例如：</p>
+              <button class="suggestion" data-text="看看磁盘和内存的使用情况，有什么异常吗？">检查磁盘与内存</button>
+              <button class="suggestion" data-text="帮我排查一下最近 nginx 的报错日志">排查 nginx 日志</button>
+              <button class="suggestion" data-text="列出当前占用 CPU 最高的 5 个进程">查看高 CPU 进程</button>
+            </div>
+          </div>
+
+          <div class="ai-composer" id="ai-composer">
+            <div class="composer-model">
+              <label for="ai-model-select">模型</label>
+              <select id="ai-model-select" title="选择用于对话的供应商模型"></select>
+            </div>
+            <div class="composer-box">
+              <textarea id="ai-input" rows="1" placeholder="让 AI 检查服务器、执行命令…（Enter 发送，Shift+Enter 换行）"></textarea>
+              <button class="send-btn" id="btn-ai-send" title="发送">
+                <svg viewBox="0 0 16 16"><path d="M2.5 8 13.5 2.8 11 13.2 8.2 9.4 2.5 8Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="send-btn stop hidden" id="btn-ai-stop" title="停止">
+                <svg viewBox="0 0 16 16"><rect x="4.5" y="4.5" width="7" height="7" rx="1" fill="currentColor"/></svg>
+              </button>
+            </div>
+            <div class="composer-hint" id="composer-hint">未连接会话</div>
+          </div>
+        </aside>
+
+        <button class="ai-rail hidden" id="ai-rail" title="展开 AI 助手">✦</button>
+      </div>
+    </section>
+
+    <!-- 主机页：已保存的主机 -->
+    <section class="view hidden" id="view-hosts">
+      <div class="page-head">
+        <div class="page-title">
+          <h1>主机</h1>
+          <span class="page-sub" id="hosts-sub">0 台已保存</span>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="btn small ghost" id="btn-host-refresh">刷新</button>
+          <button type="button" class="btn small primary" id="btn-host-new">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            新建连接
+          </button>
+        </div>
+      </div>
+      <div class="page-body">
+        <div class="host-grid" id="host-cards"></div>
+        <div class="page-empty hidden" id="hosts-empty">
+          <div class="page-empty-icon" aria-hidden="true">▤</div>
+          <p>还没有保存的主机</p>
+          <button type="button" class="btn primary" id="btn-hosts-empty-new">新建连接</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 指令集页：浏览与自定义内置指令 -->
+    <section class="view hidden" id="view-snippets">
+      <div class="page-head">
+        <div class="page-title">
+          <h1>指令集</h1>
+          <span class="page-sub" id="snippets-sub">0 条指令</span>
+        </div>
+        <div class="page-actions">
+          <button type="button" class="btn small ghost" id="btn-snippet-reset" title="清除所有自定义修改，恢复内置指令集">恢复内置</button>
+          <button type="button" class="btn small primary" id="btn-snippet-new">
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            新建指令
+          </button>
+        </div>
+      </div>
+      <div class="page-body snippet-page">
+        <aside class="snippet-nav">
+          <div class="snippet-nav-head">
+            <span>分组</span>
+            <button type="button" class="icon-btn" id="btn-group-new" title="新建分组" aria-label="新建分组">
+              <svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <ul class="snippet-nav-list" id="snippet-group-list"></ul>
+        </aside>
+        <section class="snippet-content">
+          <div class="snippet-toolbar">
+            <div class="snippet-search">
+              <div class="snippet-search-box">
+                <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.2" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="m10.2 10.2 3.2 3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+                <input id="snippet-page-search" type="search" placeholder="搜索指令名称、命令或说明…" autocomplete="off" spellcheck="false">
+              </div>
+              <span class="page-hint hidden" id="snippet-page-matched"></span>
+            </div>
+          </div>
+          <div class="snippet-table" id="snippet-table"></div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <!-- 指令集面板：挑一条命令插进终端，只输入不执行 -->
+  <div class="snippet-palette hidden" id="snippet-palette">
+    <div class="snippet-palette-scrim" data-snippet-close></div>
+    <div class="snippet-palette-panel" role="dialog" aria-modal="true" aria-labelledby="snippet-palette-title">
+      <div class="snippet-palette-head">
+        <div class="snippet-palette-title">
+          <span class="snippet-palette-badge" aria-hidden="true">&gt;_</span>
+          <div>
+            <h3 id="snippet-palette-title">指令集</h3>
+            <span class="snippet-palette-sub">选中后只输入到终端，不会自动执行</span>
+          </div>
+        </div>
+        <button class="icon-btn" id="snippet-palette-close" title="关闭 (Esc)" aria-label="关闭">
+          <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="snippet-palette-search">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.2" stroke="currentColor" stroke-width="1.4" fill="none"/><path d="m10.2 10.2 3.2 3.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        <input id="snippet-palette-search" type="search" placeholder="搜索指令、分组或命令…" autocomplete="off" spellcheck="false">
+        <kbd>Esc</kbd>
+      </div>
+      <div class="snippet-palette-body">
+        <nav class="snippet-palette-groups" id="snippet-palette-groups" aria-label="指令分组"></nav>
+        <div class="snippet-palette-list" id="snippet-palette-list" role="listbox" aria-label="指令列表"></div>
+      </div>
+      <div class="snippet-var-form hidden" id="snippet-var-form">
+        <div class="snippet-var-head">
+          <span class="snippet-var-title" id="snippet-var-title">填写变量</span>
+          <span class="snippet-var-tip">留空的变量会保留 <code>&lt;变量名&gt;</code> 占位符</span>
+        </div>
+        <code class="snippet-var-preview" id="snippet-var-preview"></code>
+        <div class="snippet-var-fields" id="snippet-var-fields"></div>
+        <div class="snippet-var-actions">
+          <button type="button" class="btn small ghost" id="snippet-var-back">返回列表</button>
+          <button type="button" class="btn small ghost" id="snippet-insert-raw">插入占位符</button>
+          <button type="button" class="btn small primary" id="snippet-insert">插入到终端</button>
+        </div>
+      </div>
+      <div class="snippet-palette-foot">
+        <span>匹配 <b id="snippet-count">0</b> 条指令</span>
+        <span class="snippet-palette-keys"><kbd>↑</kbd><kbd>↓</kbd> 选择 <kbd>Enter</kbd> 插入</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <div class="context-menu hidden" id="tab-menu" role="menu" aria-label="终端标签菜单">
+    <button role="menuitem" data-action="duplicate">复制新会话</button>
+    <button role="menuitem" data-action="split-right">左右分屏</button>
+    <button role="menuitem" data-action="split-down">上下分屏</button>
+    <button role="menuitem" data-action="unsplit">取消分屏</button>
+    <button role="menuitem" data-action="close">关闭会话</button>
+  </div>
+  <div class="context-menu hidden" id="terminal-menu">
+    <button data-action="copy">复制</button>
+    <button data-action="paste">粘贴</button>
+    <button data-action="clear">清屏</button>
+    <button data-action="interrupt">发送 Ctrl+C</button>
+  </div>
+
+  <!-- 无边框窗口的边缘缩放热区（真正的缩放由 Win32 完成） -->
+  <div id="window-resizers" aria-hidden="true">
+    <div class="win-resize" data-edge="top"></div>
+    <div class="win-resize" data-edge="right"></div>
+    <div class="win-resize" data-edge="bottom"></div>
+    <div class="win-resize" data-edge="left"></div>
+    <div class="win-resize" data-edge="top-left"></div>
+    <div class="win-resize" data-edge="top-right"></div>
+    <div class="win-resize" data-edge="bottom-left"></div>
+    <div class="win-resize" data-edge="bottom-right"></div>
+  </div>
+</div>
+
+<!-- 连接弹窗 -->
+<div class="modal-backdrop hidden" id="host-modal">
+  <div class="modal host-modal" role="dialog" aria-modal="true" aria-labelledby="host-modal-title">
+    <div class="modal-head">
+      <h3 id="host-modal-title">新建连接</h3>
+      <button class="icon-btn" data-close="host-modal" aria-label="关闭">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="host-form" autocomplete="off">
+      <input type="hidden" id="host-id">
+      <div class="field">
+        <label for="host-name">名称 <span class="hint">可选</span></label>
+        <input id="host-name" placeholder="例如：生产环境 / 数据库">
+      </div>
+      <div class="field-row">
+        <div class="field grow">
+          <label for="host-address">主机</label>
+          <input id="host-address" placeholder="192.168.1.10 或 example.com" required>
+        </div>
+        <div class="field port">
+          <label for="host-port">端口</label>
+          <input id="host-port" type="number" value="22" min="1" max="65535">
+        </div>
+      </div>
+      <div class="field">
+        <label for="host-user">用户名</label>
+        <input id="host-user" placeholder="root" required>
+      </div>
+      <div class="field">
+        <label>认证方式</label>
+        <div class="segmented" id="host-auth">
+          <button type="button" data-value="password" class="active">密码</button>
+          <button type="button" data-value="key">私钥</button>
+        </div>
+      </div>
+      <div class="field auth-panel" data-auth="password">
+        <label for="host-password">密码</label>
+        <div class="input-with-btn">
+          <input id="host-password" type="password" placeholder="登录密码">
+          <button type="button" class="ghost-btn" data-toggle-password="host-password">显示</button>
+        </div>
+        <p class="field-hint" id="host-password-hint"></p>
+      </div>
+      <div class="field auth-panel hidden" data-auth="key">
+        <label for="host-keypath">私钥文件</label>
+        <div class="input-with-btn">
+          <input id="host-keypath" placeholder="C:\Users\you\.ssh\id_ed25519">
+          <button type="button" class="ghost-btn" id="btn-pick-key">浏览</button>
+        </div>
+      </div>
+      <div class="field auth-panel hidden" data-auth="key">
+        <label for="host-passphrase">私钥口令 <span class="hint">没有可留空</span></label>
+        <div class="input-with-btn">
+          <input id="host-passphrase" type="password" placeholder="passphrase">
+          <button type="button" class="ghost-btn" data-toggle-password="host-passphrase">显示</button>
+        </div>
+      </div>
+      <label class="checkline" id="host-save-line">
+        <input type="checkbox" id="host-save" checked>
+        <span>保存到主机列表（密码使用 Windows DPAPI 加密存储）</span>
+      </label>
+      <p class="form-error hidden" id="host-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-close="host-modal">取消</button>
+        <button type="submit" class="btn primary" id="host-connect">连接</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 指令编辑弹窗：新建 / 编辑内置或自定义指令 -->
+<div class="modal-backdrop hidden" id="snippet-modal">
+  <div class="modal snippet-modal" role="dialog" aria-modal="true" aria-labelledby="snippet-modal-title">
+    <div class="modal-head">
+      <h3 id="snippet-modal-title">新建指令</h3>
+      <button class="icon-btn" data-close="snippet-modal" aria-label="关闭">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="snippet-form" autocomplete="off">
+      <input type="hidden" id="snippet-id">
+      <input type="hidden" id="snippet-builtin">
+      <input type="hidden" id="snippet-group-id">
+      <div class="field">
+        <label for="snippet-name">名称</label>
+        <input id="snippet-name" placeholder="例如：查看所有 Pod" required>
+      </div>
+      <div class="field">
+        <label for="snippet-command">命令</label>
+        <input id="snippet-command" class="mono" placeholder="kubectl get pods -A -o wide" required>
+        <p class="field-hint">变量写成 <code>&lt;变量名&gt;</code>，插入终端时会先让你填写。</p>
+      </div>
+      <div class="field">
+        <label for="snippet-note">说明 <span class="hint">可选</span></label>
+        <input id="snippet-note" placeholder="这条命令用来做什么">
+      </div>
+      <div class="field" id="snippet-group-field">
+        <label for="snippet-group-select">所属分组</label>
+        <select id="snippet-group-select"></select>
+        <input id="snippet-new-group" class="hidden" placeholder="新分组名称，例如：常用巡检">
+        <p class="field-hint" id="snippet-group-hint"></p>
+      </div>
+      <p class="form-error hidden" id="snippet-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-close="snippet-modal">取消</button>
+        <button type="submit" class="btn primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 分组编辑弹窗 -->
+<div class="modal-backdrop hidden" id="group-modal">
+  <div class="modal group-modal" role="dialog" aria-modal="true" aria-labelledby="group-modal-title">
+    <div class="modal-head">
+      <h3 id="group-modal-title">新建分组</h3>
+      <button class="icon-btn" data-close="group-modal" aria-label="关闭">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="group-form" autocomplete="off">
+      <input type="hidden" id="group-id">
+      <div class="field">
+        <label for="group-name">分组名称</label>
+        <input id="group-name" placeholder="例如：常用巡检" required>
+      </div>
+      <p class="form-error hidden" id="group-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn danger hidden" id="btn-group-delete">删除分组</button>
+        <button type="button" class="btn ghost" data-close="group-modal">取消</button>
+        <button type="submit" class="btn primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 设置弹窗 -->
+<div class="modal-backdrop hidden" id="settings-modal">
+  <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <div class="modal-head">
+      <h3 id="settings-title">设置</h3>
+      <button class="icon-btn" data-close="settings-modal" aria-label="关闭">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="settings-body">
+      <nav class="settings-nav">
+        <button class="active" data-pane="general">通用</button>
+        <button data-pane="models">AI 模型</button>
+        <button data-pane="about">关于</button>
+      </nav>
+      <div class="settings-panes">
+        <section class="settings-pane active" data-pane="general">
+          <div class="field-row">
+            <div class="field grow">
+              <label for="set-theme">主题</label>
+              <select id="set-theme">
+                <option value="dark">深色</option>
+                <option value="light">浅色</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="set-fontsize">终端字号</label>
+              <input id="set-fontsize" type="number" min="9" max="28" step="1">
+            </div>
+          </div>
+          <div class="field">
+            <label for="set-approval">AI 命令执行策略</label>
+            <select id="set-approval">
+              <option value="confirm">每条命令都需要确认</option>
+              <option value="safe">仅安全命令自动执行，其余确认</option>
+              <option value="auto">全部自动执行（危险）</option>
+            </select>
+            <p class="field-hint">无论哪种策略，危险命令（rm -rf /、mkfs、关机等）都会强制确认。</p>
+          </div>
+          <div class="field-row">
+            <div class="field grow">
+              <label for="set-timeout">单条命令超时（秒）</label>
+              <input id="set-timeout" type="number" min="10" max="900" step="5">
+            </div>
+            <div class="field grow">
+              <label for="set-steps">单轮最多自动步数</label>
+              <input id="set-steps" type="number" min="1" max="30" step="1">
+            </div>
+          </div>
+          <label class="checkline">
+            <input type="checkbox" id="set-copyonselect">
+            <span>选中即复制（类似 PuTTY）</span>
+          </label>
+          <div class="field">
+            <label class="checkline"><input type="checkbox" id="set-terminal-highlight"><span>终端输出规则高亮</span></label>
+            <div class="field-row" id="highlight-rule-options">
+              <label class="checkline"><input type="checkbox" data-highlight-rule="error"><span>错误 / 失败（红）</span></label>
+              <label class="checkline"><input type="checkbox" data-highlight-rule="warning"><span>警告 / 超时（黄）</span></label>
+              <label class="checkline"><input type="checkbox" data-highlight-rule="success"><span>成功 / 运行中（绿）</span></label>
+              <label class="checkline"><input type="checkbox" data-highlight-rule="address"><span>IPv4 / URL（蓝）</span></label>
+            </div>
+            <p class="field-hint">仅高亮匹配内容，保留程序原有颜色；支持常见日志与 Kubernetes 状态。vim / top 等全屏程序不应用规则。</p>
+          </div>
+          <div class="field">
+            <label for="set-download-dir">接收文件保存到</label>
+            <div class="field-row">
+              <input id="set-download-dir" class="grow mono" placeholder="默认：下载\yhShell">
+              <button type="button" class="ghost-btn" id="btn-pick-download-dir">浏览</button>
+            </div>
+            <p class="field-hint">远端执行 <code>sz 文件</code> 下载到这里；<code>rz</code> 上传时会弹出本地文件选择框。</p>
+          </div>
+          <label class="checkline">
+            <input type="checkbox" id="set-zmodem-confirm">
+            <span>接收前弹窗确认（默认关闭：<code>sz</code> 直接存到上面的目录；打开后远端最多只等约 20 秒）</span>
+          </label>
+          <label class="checkline">
+            <input type="checkbox" id="set-zmodem-overwrite">
+            <span>同名文件直接覆盖（默认自动改名为「文件 (1)」）</span>
+          </label>
+          <div class="modal-actions">
+            <span class="settings-save-hint" id="settings-save-hint"></span>
+            <button type="button" class="btn primary" id="btn-save-settings">保存设置</button>
+          </div>
+        </section>
+
+        <section class="settings-pane" data-pane="models">
+          <div class="models-head">
+            <p class="field-hint">添加一个 OpenAI 兼容供应商（Base URL + API Key），点「获取模型」会向上游 <code>/models</code> 拉取并自动加入全部模型，无需逐个勾选；之后按设定的间隔自动刷新同步。</p>
+            <button class="btn small primary" id="btn-add-provider">添加供应商</button>
+          </div>
+          <div class="models-syncbar">
+            <label for="set-sync-hours">自动同步模型</label>
+            <select id="set-sync-hours">
+              <option value="0">关闭</option>
+              <option value="6">每 6 小时</option>
+              <option value="12">每 12 小时</option>
+              <option value="24">每 24 小时</option>
+              <option value="72">每 3 天</option>
+            </select>
+            <span class="field-hint" id="model-sync-hint"></span>
+            <button type="button" class="btn small ghost" id="btn-sync-models">立即同步</button>
+          </div>
+          <div class="model-list" id="provider-list"></div>
+          <p class="field-hint">API Key 使用 Windows DPAPI 加密保存，界面与日志中不会出现明文。</p>
+        </section>
+
+        <section class="settings-pane" data-pane="about">
+          <div class="about-card">
+            <div class="about-logo">&gt;_</div>
+            <div>
+              <h4>yhShell <span class="muted" id="about-version">v0.1.0</span></h4>
+              <p>pywebview + xterm.js + paramiko 构建的 SSH 客户端，内置可自定义的 AI Agent。</p>
+            </div>
+          </div>
+          <dl class="about-list">
+            <div><dt>Python</dt><dd id="about-python">—</dd></div>
+            <div><dt>pywebview</dt><dd id="about-webview">—</dd></div>
+            <div><dt>配置文件</dt><dd id="about-config" class="mono">—</dd></div>
+          </dl>
+          <section class="update-panel" aria-labelledby="update-title">
+            <div class="update-heading">
+              <h4 id="update-title">版本更新</h4>
+              <button type="button" class="btn small ghost" id="btn-check-updates">检查更新</button>
+            </div>
+            <label class="checkline">
+              <input type="checkbox" id="set-update-auto">
+              <span>自动检查新版本（立即保存）</span>
+            </label>
+            <p class="field-hint">检查更新会连接 GitHub，GitHub 可获知你的 IP 地址；不会发送 SSH 主机、凭据、终端内容或 AI 配置。关闭自动检查后，仍可手动检查。</p>
+            <p class="update-status" id="update-status" role="status" aria-live="polite">尚未检查更新</p>
+            <p class="form-error hidden" id="update-error" role="status"></p>
+            <p class="field-hint" id="update-last-success">上次成功检查：尚无记录</p>
+            <article class="update-release hidden" id="update-release" aria-labelledby="update-release-version">
+              <div class="update-heading">
+                <strong id="update-release-version"></strong>
+                <span class="muted hidden" id="update-ignored">已忽略此版本</span>
+              </div>
+              <p class="field-hint" id="update-published"></p>
+              <pre class="update-notes" id="update-notes"></pre>
+              <div class="update-actions">
+                <button type="button" class="btn small primary" id="btn-update-download">前往 GitHub 下载</button>
+                <button type="button" class="btn small ghost" id="btn-update-ignore">忽略此版本</button>
+              </div>
+              <p class="field-hint">在浏览器中打开发布页，手动下载并安装；不会自动安装或中断当前 SSH 会话。</p>
+            </article>
+          </section>
+          <div class="modal-actions">
+            <button class="btn ghost" id="btn-open-config">打开配置目录</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 供应商编辑弹窗 -->
+<div class="modal-backdrop hidden" id="model-modal">
+  <div class="modal provider-modal" role="dialog" aria-modal="true" aria-labelledby="model-modal-title">
+    <div class="modal-head">
+      <h3 id="model-modal-title">添加供应商</h3>
+      <button class="icon-btn" data-close="model-modal" aria-label="关闭">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="model-form" autocomplete="off">
+      <input type="hidden" id="model-id">
+      <div class="field-row">
+        <div class="field grow">
+          <label for="model-preset">快速模板</label>
+          <select id="model-preset">
+            <option value="">自定义</option>
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="moonshot">Moonshot Kimi</option>
+            <option value="dashscope">通义千问（DashScope）</option>
+            <option value="zhipu">智谱 GLM</option>
+            <option value="openrouter">OpenRouter</option>
+            <option value="ollama">Ollama 本地</option>
+          </select>
+        </div>
+        <div class="field grow">
+          <label for="model-name">名称</label>
+          <input id="model-name" placeholder="例如：DeepSeek">
+        </div>
+      </div>
+      <div class="field">
+        <label for="model-baseurl">Base URL</label>
+        <input id="model-baseurl" placeholder="https://api.deepseek.com" required>
+        <p class="field-hint">填到 /v1 或版本段即可，程序会自动补全 /chat/completions 与 /models；也可直接填完整地址。</p>
+      </div>
+      <div class="field">
+        <label for="model-apikey">API Key</label>
+        <div class="input-with-btn">
+          <input id="model-apikey" type="password" placeholder="sk-…">
+          <button type="button" class="ghost-btn" data-toggle-password="model-apikey">显示</button>
+        </div>
+        <p class="field-hint" id="model-apikey-hint"></p>
+      </div>
+      <div class="field-row">
+        <div class="field grow">
+          <label for="model-temp">Temperature</label>
+          <input id="model-temp" type="number" min="0" max="2" step="0.1" value="0.3">
+        </div>
+        <div class="field grow">
+          <label for="model-tokens">最大回复 tokens</label>
+          <input id="model-tokens" type="number" min="64" max="32768" step="64" value="2048">
+        </div>
+      </div>
+      <div class="field models-field">
+        <div class="models-pick-head">
+          <span class="models-pick-title">模型</span>
+          <div class="models-pick-tools">
+            <span class="field-hint" id="model-count"></span>
+            <button type="button" class="btn small ghost" id="btn-fetch-models">获取模型</button>
+          </div>
+        </div>
+        <p class="field-hint" id="model-pick-hint">点「获取模型」请求上游 /models；成功后全部模型自动加入，无需逐个勾选。</p>
+        <input id="model-filter" class="model-filter hidden" type="search" placeholder="搜索或输入模型 id…">
+        <div class="model-picker" id="model-picker"></div>
+        <div class="models-pick-foot hidden" id="model-pick-foot">
+          <span class="field-hint" id="model-selected-count"></span>
+        </div>
+      </div>
+      <p class="form-error hidden" id="model-error"></p>
+      <div class="modal-actions">
+        <button type="button" class="btn ghost" data-close="model-modal">取消</button>
+        <button type="submit" class="btn primary">保存</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 历史对话 -->
+<div class="modal-backdrop hidden" id="history-modal">
+  <div class="modal history-modal" role="dialog" aria-modal="true" aria-labelledby="history-title">
+    <div class="modal-head">
+      <h3 id="history-title">历史对话</h3>
+      <button class="icon-btn" data-close="history-modal" aria-label="关闭">
+        <svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <p class="field-hint history-hint">AI 对话会自动保存到本地（仅当前 Windows 用户可读）。查看历史不会影响当前会话。</p>
+    <div class="history-list" id="history-list"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btn-open-history-dir">打开存储目录</button>
+      <button class="btn ghost" data-close="history-modal">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 通用确认框 -->
+<div class="modal-backdrop hidden" id="confirm-modal">
+  <div class="modal confirm-modal" role="dialog" aria-modal="true">
+    <h3 id="confirm-title">确认</h3>
+    <p id="confirm-text"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" id="confirm-cancel">取消</button>
+      <button class="btn danger" id="confirm-ok">确定</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/xterm.js"></script>
+<script src="vendor/addon-fit.js"></script>
+<script src="js/terminal-highlight.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

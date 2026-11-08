@@ -1,0 +1,11 @@
+{
+  "name": "yhshell-ui-mock",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "puppeteer-core": "^25.0.0"
+  },
+  "devDependencies": {
+    "zmodem.js": "^0.1.10"
+  }
+}

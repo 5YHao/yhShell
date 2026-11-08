@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import puppeteer from 'puppeteer-core';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const browser = await puppeteer.launch({ executablePath: process.env.YHS_EDGE || 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', headless: true });
+try {
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.setContent('<div id="terminal" style="width:900px;height:500px"></div>');
+  await page.addStyleTag({ path: path.join(root, 'web/vendor/xterm.css') });
+  await page.addScriptTag({ path: path.join(root, 'web/vendor/xterm.js') });
+  await page.addScriptTag({ path: path.join(root, 'web/js/terminal-highlight.js') });
+  const results = await page.evaluate(async () => {
+    const check = (condition, message) => { if (!condition) throw new Error(message); };
+    const term = new Terminal({ cols: 60, rows: 10, allowProposedApi: true });
+    term.open(document.querySelector('#terminal'));
+    let settings = { theme: 'dark', terminalHighlight: true };
+    const highlighter = new TerminalHighlight.Highlighter(term, () => settings);
+    // Automatic writes coalesce at a bounded rate; wait for trailing work before paint.
+    const settle = async () => {
+      await new Promise(resolve => setTimeout(resolve, 70));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    };
+    const write = async text => { await new Promise(resolve => term.write(text, resolve)); await settle(); };
+    const count = () => highlighter.marks.length;
+    await write('中文 ER');
+    check(count() === 0, 'partial keyword should wait');
+    await write('ROR at 192.168.1.5 https://example.com\r\n');
+    check(count() === 3, 'split chunks and addresses');
+    check(highlighter.marks[0].decoration.options.x === 5, 'wide character column mapping');
+    check(term.buffer.active.getLine(0).translateToString(true) === '中文 ERROR at 192.168.1.5 https://example.com', 'original buffer is unchanged');
+    const originalMark = highlighter.marks[0];
+    await write('\x1b[31mERROR\x1b[0m warning Running\r\n');
+    check(count() === 5, 'preserve ANSI foreground');
+    check(highlighter.marks[0] === originalMark, 'unchanged spans retain decoration identity');
+    settings = { ...settings, terminalHighlightRules: { address: false } };
+    highlighter.refresh(); await settle();
+    check(count() === 3, 'disable category immediately');
+    settings = { ...settings, theme: 'light' };
+    highlighter.refresh(); await settle();
+    check(highlighter.marks[0].decoration.options.foregroundColor === '#bd2339', 'light palette');
+    settings = { ...settings, terminalHighlight: false };
+    highlighter.refresh(); await settle(); check(count() === 0, 'disable all');
+    settings = { theme: 'dark', terminalHighlight: true };
+    await write('\x1b[?1049hERROR warning\r\n');
+    check(count() === 0, 'alternate screen excluded');
+    await write('\x1b[?1049l'); check(count() === 5, 'normal buffer restored');
+    await write('\x1b[2J\x1b[H' + ' '.repeat(58) + 'ERROR\r\n');
+    check(count() === 2, 'wrapped keyword creates two spans');
+    for (let i = 0; i < 20; i++) await write('plain line\r\n');
+    check(count() === 0, 'only visible viewport decorated');
+    term.scrollToTop(); await settle(); check(count() === 2, 'scrollback highlight');
+    const container = document.querySelector('#terminal');
+    container.style.display = 'none';
+    let renders = 0;
+    const render = highlighter.render.bind(highlighter);
+    highlighter.render = () => { renders++; render(); };
+    await write('success\r\n');
+    check(renders === 0, 'hidden terminals skip scans');
+    container.style.display = '';
+    highlighter.refresh(); await settle();
+    check(renders === 1, 'visibility resume refresh');
+    term.scrollToBottom();
+    await write('ERROR\r\n'.repeat(1200));
+    check(highlighter.marks.every(mark => !mark.marker.isDisposed && mark.marker.line >= term.buffer.active.viewportY), 'trimmed scrollback markers stay live');
+    highlighter.dispose(); check(count() === 0, 'cleanup');
+    term.dispose();
+    const kinds = TerminalHighlight.matches('NotReady unhealthy failed WARNING Success 256.1.1.1');
+    check(kinds.filter(m => m.kind === 'error').length === 3, 'error priority and word boundaries');
+    check(!kinds.some(m => m.kind === 'address'), 'invalid IPv4 excluded');
+    return 'split output, Unicode, ANSI, rules, themes, alternate buffer, wrapping, scrolling, cleanup';
+  });
+  assert.deepEqual(errors, []);
+  console.log(`PASS: ${results}`);
+} finally { await browser.close(); }
